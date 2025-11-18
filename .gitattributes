@@ -1,0 +1,19 @@
+# GitHub Linguist tuning for this multi-language repository.
+# Each implementation lives in its own directory; force Linguist to
+# attribute files inside to the correct language so the repo overview
+# better reflects the arena makeup instead of whichever port is largest.
+implementations/ada/** linguist-language=Ada
+implementations/cpp/** linguist-language=C++
+implementations/dotnet/** linguist-language=C#
+implementations/erlang/** linguist-language=Erlang
+implementations/go/** linguist-language=Go
+implementations/haskell/** linguist-language=Haskell
+implementations/java/** linguist-language=Java
+implementations/javascript/** linguist-language=JavaScript
+implementations/python/** linguist-language=Python
+implementations/rust/** linguist-language=Rust
+implementations/swift/** linguist-language=Swift
+
+# Documentation/data shouldn't skew language stats.
+docs/** linguist-documentation=true
+shared/** linguist-documentation=true
