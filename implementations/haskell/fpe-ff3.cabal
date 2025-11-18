@@ -6,7 +6,7 @@ description:        Educational Haskell implementation of FF3 FPE algorithm.
                     ⚠️ FF3 was withdrawn by NIST due to security vulnerabilities.
                     This implementation is for educational and research purposes only.
 homepage:           https://github.com/horizondigitalengineering/fpe-ff3
-license:            OtherLicense
+license:            LicenseRef-BUSL-1.1
 license-file:       LICENSE
 author:             Horizon Digital Engineering
 maintainer:         engineering@horizondigital.dev
