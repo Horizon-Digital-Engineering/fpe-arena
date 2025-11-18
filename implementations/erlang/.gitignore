@@ -1,0 +1,27 @@
+# Compiled beam files
+ebin/
+*.beam
+
+# Archives
+*.ez
+
+# Dump files
+*.dump
+
+# Rebar3 build artifacts
+_build/
+rebar3
+rebar.lock
+
+# Cover reports
+.eunit/
+logs/
+
+# Dialyzer files
+*.plt
+*.plt.local
+
+# Editor/OS files
+.DS_Store
+Thumbs.db
+*~

@@ -1,0 +1,11 @@
+{
+  "alphabet": "digits",
+  "radix": 10,
+  "lengths": [9, 12],
+  "cases": ["enc", "dec"],
+  "iterations": 5000,
+  "warmup": 500,
+  "key": "EF4359D8D580AA4F7F036D6F04FC6A94",
+  "tweak": "D8E7920AFA330A73",
+  "seed": 12345
+}

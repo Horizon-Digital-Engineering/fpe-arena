@@ -1,0 +1,54 @@
+{
+  "description": "Standard benchmark schema for FF3 implementations across languages",
+  "version": "1.0",
+  "input_parameters": {
+    "keysize": {
+      "type": "integer",
+      "values": [128, 192, 256],
+      "description": "AES key size in bits"
+    },
+    "radix": {
+      "type": "integer", 
+      "values": [10, 26, 36],
+      "description": "Number base for plaintext (10=digits, 26=letters, 36=alphanumeric)"
+    },
+    "length": {
+      "type": "integer",
+      "values": [8, 16, 18, 24, 32],
+      "description": "Plaintext length in characters"
+    },
+    "iterations": {
+      "type": "integer",
+      "default": 10000,
+      "description": "Number of encrypt/decrypt operations to perform"
+    }
+  },
+  "output_format": {
+    "timestamp": "ISO 8601 timestamp",
+    "language": "Programming language/runtime",
+    "version": "Language/runtime version",
+    "keysize": "AES key size used",
+    "radix": "Radix used", 
+    "length": "Plaintext length used",
+    "iterations": "Number of operations performed",
+    "encrypt_ns_per_op": "Nanoseconds per encrypt operation",
+    "decrypt_ns_per_op": "Nanoseconds per decrypt operation", 
+    "encrypt_ops_per_sec": "Encrypt operations per second",
+    "decrypt_ops_per_sec": "Decrypt operations per second",
+    "total_time_ms": "Total benchmark time in milliseconds"
+  },
+  "example_output": {
+    "timestamp": "2024-09-21T18:45:00Z",
+    "language": "go",
+    "version": "go1.22.3",
+    "keysize": 128,
+    "radix": 10,
+    "length": 18,
+    "iterations": 10000,
+    "encrypt_ns_per_op": 540,
+    "decrypt_ns_per_op": 535,
+    "encrypt_ops_per_sec": 1851851,
+    "decrypt_ops_per_sec": 1869158,
+    "total_time_ms": 10.75
+  }
+}

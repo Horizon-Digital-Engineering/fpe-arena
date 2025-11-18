@@ -1,0 +1,7 @@
+{application, ff3_bench,
+ [{description, "FF3 Performance Benchmark Tool"},
+  {vsn, "1.0.0"},
+  {modules, [ff3_bench_main]},
+  {registered, []},
+  {applications, [kernel, stdlib, ff3]}
+ ]}.

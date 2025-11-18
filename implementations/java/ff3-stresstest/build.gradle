@@ -1,0 +1,11 @@
+plugins {
+    id 'application'
+}
+
+dependencies {
+    implementation project(':ff3-core')
+}
+
+application {
+    mainClass = 'dev.horizondigital.ff3.stresstest.FF3StressTest'
+}

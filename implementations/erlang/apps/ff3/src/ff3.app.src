@@ -1,0 +1,10 @@
+{application, ff3,
+ [{description, "FF3 Format Preserving Encryption Library"},
+  {vsn, "1.0.0"},
+  {modules, [ff3_core, ff3_api, ff3_alphabets]},
+  {registered, []},
+  {applications, [kernel, stdlib, crypto]},
+  {licenses, ["BUSL-1.1"]},
+  {links, [{"GitHub", "https://github.com/fpe-arena/implementations"}]},
+  {maintainers, ["FPE Arena Team"]}
+ ]}.

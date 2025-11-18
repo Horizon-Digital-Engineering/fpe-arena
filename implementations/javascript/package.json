@@ -1,0 +1,49 @@
+{
+  "name": "fpe-ff3",
+  "version": "0.1.0",
+  "description": "Experimental FF3 Format Preserving Encryption implementation for research and educational purposes",
+  "main": "lib/index.js",
+  "type": "module",
+  "bin": {
+    "ff3": "bin/ff3.js",
+    "ff3-validate": "bin/ff3-validate.js",
+    "ff3-benchmark": "bin/ff3-benchmark.js",
+    "ff3-stresstest": "bin/ff3-stresstest.js"
+  },
+  "scripts": {
+    "test": "node test/test.js",
+    "test:unit": "nyc --reporter=text --reporter=html --exclude='bin/**' node test/unit.test.js",
+    "test:integration": "node test/integration.test.js",
+    "test:coverage": "nyc --reporter=text --reporter=html --exclude='bin/**' npm test",
+    "benchmark": "node bin/ff3-benchmark.js",
+    "validate": "node bin/ff3-validate.js",
+    "stresstest": "node bin/ff3-stresstest.js"
+  },
+  "keywords": ["ff3", "fpe", "format-preserving-encryption", "research", "educational"],
+  "author": "Horizon Digital Engineering",
+  "license": "BUSL-1.1",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "devDependencies": {
+    "nyc": "^15.1.0"
+  },
+  "exports": {
+    ".": {
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib/",
+    "bin/",
+    "test/",
+    "README.md",
+    "LICENSE"
+  ],
+  "homepage": "https://github.com/horizondigitalengineering/fpe-ff3",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/horizondigitalengineering/fpe-ff3"
+  },
+  "warning": "⚠️ FF3 was withdrawn by NIST due to security vulnerabilities. This implementation is for educational and research purposes only."
+}

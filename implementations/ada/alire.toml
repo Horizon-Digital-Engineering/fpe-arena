@@ -1,0 +1,24 @@
+name = "ff3_ada"
+description = "Ada FF3 Format Preserving Encryption with NIST compliance"
+version = "1.0.0"
+authors = ["FPE Arena Contributors"]
+maintainers = ["team@fpe-arena.org"]
+maintainers-logins = ["fpe-arena"]
+licenses = "BUSL-1.1"
+website = "https://github.com/fpe-arena/implementations"
+tags = ["cryptography", "ff3", "fpe", "ada", "nist"]
+
+# Project configuration
+executables = ["ff3_cli", "ff3_validate", "ff3_benchmark", "ff3_stresstest"]
+
+[[depends-on]]
+utilada = "~2.8.1"
+gnatcoll = "~24.0.0"
+
+[gpr-externals]
+BUILD_MODE = ["release", "debug"]
+FF3_LIBRARY_TYPE = ["static", "relocatable"]
+
+[gpr-set-externals]
+BUILD_MODE = "release"
+FF3_LIBRARY_TYPE = "static"

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageId>FF3.Core</PackageId>
+    <Title>FF3 Format Preserving Encryption Core Library</Title>
+    <Description>Core FF3 Format Preserving Encryption implementation for research and educational purposes</Description>
+    <Copyright>Copyright (c) Horizon Digital Engineering</Copyright>
+    <PackageLicenseExpression>BUSL-1.1</PackageLicenseExpression>
+  </PropertyGroup>
+
+</Project>

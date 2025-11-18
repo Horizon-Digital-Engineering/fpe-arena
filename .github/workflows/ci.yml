@@ -1,0 +1,911 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+    inputs:
+      run_benchmarks:
+        description: 'Run benchmark tests'
+        required: false
+        type: boolean
+        default: false
+      languages:
+        description: 'Languages to test (comma-separated, or "all")'
+        required: false
+        type: string
+        default: 'all'
+
+jobs:
+  # ============================================================================
+  # GO IMPLEMENTATION
+  # ============================================================================
+  go-build:
+    name: Go - Build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.languages == '' || github.event.inputs.languages == 'all' || contains(github.event.inputs.languages, 'go')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+          cache-dependency-path: implementations/go/go.sum
+          cache: true
+      - name: Build Go binaries
+        working-directory: implementations/go
+        run: |
+          go build -o ff3-cli ./cmd/ff3-cli
+          go build -o ff3-validate ./cmd/ff3-validate
+          go build -o ff3-bench ./cmd/ff3-bench
+          go build -o ff3-stresstest ./cmd/ff3-stresstest
+      - name: Run unit tests
+        working-directory: implementations/go
+        run: go test ./...
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-binaries
+          path: implementations/go/ff3-*
+
+  go-validate:
+    name: Go - NIST Validation
+    runs-on: ubuntu-latest
+    needs: go-build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: go-binaries
+          path: implementations/go
+      - name: Make binaries executable
+        working-directory: implementations/go
+        run: chmod +x ff3-*
+      - name: Copy test vectors to standard location
+        run: |
+          mkdir -p /tmp/ff3-test-data
+          cp shared/test-vectors/nist_ff3_official_vectors.json /tmp/ff3-test-data/
+      - name: Run NIST validation
+        working-directory: implementations/go
+        run: ./ff3-validate --vectors /tmp/ff3-test-data/nist_ff3_official_vectors.json
+
+  go-benchmark:
+    name: Go - Benchmarks
+    runs-on: ubuntu-latest
+    needs: go-validate
+    if: github.event.inputs.run_benchmarks == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: go-binaries
+          path: implementations/go
+      - name: Make binaries executable
+        working-directory: implementations/go
+        run: chmod +x ff3-*
+      - name: Run benchmarks
+        working-directory: implementations/go
+        run: ./ff3-bench --alphabet digits --iterations 50000 --warmup 5000 --cases enc,dec,roundtrip
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-benchmark-results
+          path: implementations/go/go-benchmark.json
+
+  # ============================================================================
+  # RUST IMPLEMENTATION
+  # ============================================================================
+  rust-build:
+    name: Rust - Build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.languages == '' || github.event.inputs.languages == 'all' || contains(github.event.inputs.languages, 'rust')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            implementations/rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('implementations/rust/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: Build Rust library and binaries
+        working-directory: implementations/rust
+        run: |
+          cargo build --release --lib
+          cargo build --release --bin ff3-validate
+          cargo build --release --bin ff3-benchmark
+          cargo build --release --bin ff3-stresstest
+      - name: Run unit tests
+        working-directory: implementations/rust
+        run: cargo test
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-binaries
+          path: |
+            implementations/rust/target/release/ff3-validate
+            implementations/rust/target/release/ff3-benchmark
+            implementations/rust/target/release/ff3-stresstest
+
+  rust-validate:
+    name: Rust - NIST Validation
+    runs-on: ubuntu-latest
+    needs: rust-build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-binaries
+          path: implementations/rust/target/release
+      - name: Make binaries executable
+        run: chmod +x implementations/rust/target/release/ff3-*
+      - name: Copy test vectors to standard location
+        run: |
+          mkdir -p /tmp/ff3-test-data
+          cp shared/test-vectors/nist_ff3_official_vectors.json /tmp/ff3-test-data/
+      - name: Run NIST validation
+        working-directory: implementations/rust
+        run: ./target/release/ff3-validate --vectors /tmp/ff3-test-data/nist_ff3_official_vectors.json
+
+  rust-benchmark:
+    name: Rust - Benchmarks
+    runs-on: ubuntu-latest
+    needs: rust-validate
+    if: github.event.inputs.run_benchmarks == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-binaries
+          path: implementations/rust/target/release
+      - name: Make binaries executable
+        run: chmod +x implementations/rust/target/release/ff3-*
+      - name: Run benchmarks
+        working-directory: implementations/rust
+        run: ./target/release/ff3-benchmark --iterations 50000 --warmup 5000 --alphabet digits --cases enc,dec,roundtrip
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-benchmark-results
+          path: implementations/rust/rust-benchmark.json
+
+  # ============================================================================
+  # .NET IMPLEMENTATION
+  # ============================================================================
+  dotnet-build:
+    name: .NET - Build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.languages == '' || github.event.inputs.languages == 'all' || contains(github.event.inputs.languages, 'dotnet')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0'
+      - name: Copy test vectors to standard location
+        run: |
+          mkdir -p /tmp/ff3-test-data
+          cp shared/test-vectors/nist_ff3_official_vectors.json /tmp/ff3-test-data/
+      - name: Build .NET
+        working-directory: implementations/dotnet
+        env:
+          FF3_TEST_VECTORS_PATH: /tmp/ff3-test-data/nist_ff3_official_vectors.json
+        run: |
+          dotnet build
+          dotnet test
+      - name: Publish binaries
+        working-directory: implementations/dotnet
+        run: |
+          dotnet publish FF3.CLI -c Release -o publish/cli
+          dotnet publish FF3.Validate -c Release -o publish/validate
+          dotnet publish FF3.Benchmark -c Release -o publish/benchmark
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-binaries
+          path: implementations/dotnet/publish/
+
+  dotnet-validate:
+    name: .NET - NIST Validation
+    runs-on: ubuntu-latest
+    needs: dotnet-build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0'
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: dotnet-binaries
+          path: implementations/dotnet/publish
+      - name: Copy test vectors to standard location
+        run: |
+          mkdir -p /tmp/ff3-test-data
+          cp shared/test-vectors/nist_ff3_official_vectors.json /tmp/ff3-test-data/
+      - name: Run NIST validation
+        working-directory: implementations/dotnet/publish/validate
+        run: dotnet FF3.Validate.dll --vectors /tmp/ff3-test-data/nist_ff3_official_vectors.json
+
+  dotnet-benchmark:
+    name: .NET - Benchmarks
+    runs-on: ubuntu-latest
+    needs: dotnet-validate
+    if: github.event.inputs.run_benchmarks == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0'
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: dotnet-binaries
+          path: implementations/dotnet/publish
+      - name: Run benchmarks
+        working-directory: implementations/dotnet/publish/benchmark
+        run: dotnet FF3.Benchmark.dll --iterations 50000 --warmup 5000 --json-out dotnet-benchmark.json
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-benchmark-results
+          path: implementations/dotnet/publish/benchmark/dotnet-benchmark.json
+
+  # ============================================================================
+  # JAVA IMPLEMENTATION
+  # ============================================================================
+  java-build:
+    name: Java - Build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.languages == '' || github.event.inputs.languages == 'all' || contains(github.event.inputs.languages, 'java')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Copy test vectors to standard location
+        run: |
+          mkdir -p /tmp/ff3-test-data
+          cp shared/test-vectors/nist_ff3_official_vectors.json /tmp/ff3-test-data/
+      - name: Make gradlew executable
+        working-directory: implementations/java
+        run: chmod +x gradlew
+      - name: Build with Gradle
+        working-directory: implementations/java
+        env:
+          FF3_TEST_VECTORS_PATH: /tmp/ff3-test-data/nist_ff3_official_vectors.json
+        run: ./gradlew clean build --no-daemon
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-binaries
+          path: |
+            implementations/java/ff3-core/build/libs/*.jar
+            implementations/java/ff3-cli/build/libs/*.jar
+            implementations/java/ff3-validate/build/libs/*.jar
+            implementations/java/ff3-benchmark/build/libs/*.jar
+
+  java-validate:
+    name: Java - NIST Validation
+    runs-on: ubuntu-latest
+    needs: java-build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: java-binaries
+          path: implementations/java/build-artifacts
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Make gradlew executable
+        working-directory: implementations/java
+        run: chmod +x gradlew
+      - name: Copy test vectors to standard location
+        run: |
+          mkdir -p /tmp/ff3-test-data
+          cp shared/test-vectors/nist_ff3_official_vectors.json /tmp/ff3-test-data/
+      - name: Run NIST validation
+        working-directory: implementations/java
+        run: ./gradlew :ff3-validate:run --args='/tmp/ff3-test-data/nist_ff3_official_vectors.json'
+
+  java-benchmark:
+    name: Java - Benchmarks
+    runs-on: ubuntu-latest
+    needs: java-validate
+    if: github.event.inputs.run_benchmarks == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: java-binaries
+          path: implementations/java/build-artifacts
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Make gradlew executable
+        working-directory: implementations/java
+        run: chmod +x gradlew
+      - name: Run benchmarks
+        working-directory: implementations/java
+        run: ./gradlew :ff3-benchmark:run --args='--iterations 50000 --warmup 5000 --alphabet digits --cases enc,dec,roundtrip'
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-benchmark-results
+          path: implementations/java/java-benchmark.json
+
+  # ============================================================================
+  # PYTHON IMPLEMENTATION
+  # ============================================================================
+  python-build:
+    name: Python - Build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.languages == '' || github.event.inputs.languages == 'all' || contains(github.event.inputs.languages, 'python')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        working-directory: implementations/python
+        run: |
+          pip install cryptography pytest
+          pip install .
+      - name: Run unit tests
+        working-directory: implementations/python
+        run: python tests/simple_test.py
+
+  python-validate:
+    name: Python - NIST Validation
+    runs-on: ubuntu-latest
+    needs: python-build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        working-directory: implementations/python
+        run: |
+          pip install cryptography
+          pip install .
+      - name: Copy test vectors to standard location
+        run: |
+          mkdir -p /tmp/ff3-test-data
+          cp shared/test-vectors/nist_ff3_official_vectors.json /tmp/ff3-test-data/
+      - name: Run NIST validation
+        working-directory: implementations/python
+        run: python cli/ff3_validate.py --vectors /tmp/ff3-test-data/nist_ff3_official_vectors.json
+
+  python-benchmark:
+    name: Python - Benchmarks
+    runs-on: ubuntu-latest
+    needs: python-validate
+    if: github.event.inputs.run_benchmarks == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        working-directory: implementations/python
+        run: |
+          pip install cryptography
+          pip install .
+      - name: Run benchmarks
+        working-directory: implementations/python
+        run: python cli/ff3_benchmark.py --iterations 50000 --warmup 5000 --json-out python-benchmark.json
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-benchmark-results
+          path: implementations/python/python-benchmark.json
+
+  # ============================================================================
+  # JAVASCRIPT IMPLEMENTATION
+  # ============================================================================
+  javascript-build:
+    name: JavaScript - Build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.languages == '' || github.event.inputs.languages == 'all' || contains(github.event.inputs.languages, 'javascript')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install and test
+        working-directory: implementations/javascript
+        run: |
+          npm install
+          npm test
+
+  javascript-validate:
+    name: JavaScript - NIST Validation
+    runs-on: ubuntu-latest
+    needs: javascript-build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        working-directory: implementations/javascript
+        run: npm install
+      - name: Copy test vectors to standard location
+        run: |
+          mkdir -p /tmp/ff3-test-data
+          cp shared/test-vectors/nist_ff3_official_vectors.json /tmp/ff3-test-data/
+      - name: Run NIST validation
+        working-directory: implementations/javascript
+        run: node bin/ff3-validate.js --vectors /tmp/ff3-test-data/nist_ff3_official_vectors.json
+
+  javascript-benchmark:
+    name: JavaScript - Benchmarks
+    runs-on: ubuntu-latest
+    needs: javascript-validate
+    if: github.event.inputs.run_benchmarks == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        working-directory: implementations/javascript
+        run: npm install
+      - name: Run benchmarks
+        working-directory: implementations/javascript
+        run: node bin/ff3-benchmark.js --iterations 50000 --warmup 5000 --json-out javascript-benchmark.json
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: javascript-benchmark-results
+          path: implementations/javascript/javascript-benchmark.json
+
+  # ============================================================================
+  # C++ IMPLEMENTATION
+  # ============================================================================
+  cpp-build:
+    name: C++ - Build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.languages == '' || github.event.inputs.languages == 'all' || contains(github.event.inputs.languages, 'cpp')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CMake and build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake g++
+      - name: Build C++
+        working-directory: implementations/cpp
+        run: |
+          mkdir -p build
+          cd build
+          cmake ..
+          cmake --build .
+          ctest --verbose
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-binaries
+          path: |
+            implementations/cpp/build/ff3_cli
+            implementations/cpp/build/ff3_validate
+            implementations/cpp/build/ff3_benchmark
+            implementations/cpp/build/ff3_stresstest
+
+  cpp-validate:
+    name: C++ - NIST Validation
+    runs-on: ubuntu-latest
+    needs: cpp-build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: cpp-binaries
+          path: implementations/cpp/build
+      - name: Make binaries executable
+        run: chmod +x implementations/cpp/build/ff3_*
+      - name: Copy test vectors to standard location
+        run: |
+          mkdir -p /tmp/ff3-test-data
+          cp shared/test-vectors/nist_ff3_official_vectors.json /tmp/ff3-test-data/
+      - name: Run NIST validation
+        working-directory: implementations/cpp
+        run: ./build/ff3_validate --vectors /tmp/ff3-test-data/nist_ff3_official_vectors.json
+
+  cpp-benchmark:
+    name: C++ - Benchmarks
+    runs-on: ubuntu-latest
+    needs: cpp-validate
+    if: github.event.inputs.run_benchmarks == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: cpp-binaries
+          path: implementations/cpp/build
+      - name: Make binaries executable
+        run: chmod +x implementations/cpp/build/ff3_*
+      - name: Run benchmarks
+        working-directory: implementations/cpp
+        run: ./build/ff3_benchmark --iterations 50000 --warmup 5000 --json-out cpp-benchmark.json
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-benchmark-results
+          path: implementations/cpp/cpp-benchmark.json
+
+  # ============================================================================
+  # HASKELL IMPLEMENTATION
+  # ============================================================================
+  haskell-build:
+    name: Haskell - Build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.languages == '' || github.event.inputs.languages == 'all' || contains(github.event.inputs.languages, 'haskell')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.2.7'
+          cabal-version: '3.10'
+      - name: Cache Cabal dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cabal/store
+            ~/.cabal/packages
+            implementations/haskell/dist-newstyle
+          key: ${{ runner.os }}-cabal-${{ hashFiles('implementations/haskell/fpe-ff3.cabal') }}
+          restore-keys: |
+            ${{ runner.os }}-cabal-
+      - name: Build Haskell
+        working-directory: implementations/haskell
+        run: |
+          cabal update
+          cabal build all
+          cabal test
+      - name: Copy binaries
+        working-directory: implementations/haskell
+        run: |
+          mkdir -p bin
+          cp $(cabal list-bin ff3-cli) bin/
+          cp $(cabal list-bin ff3-validate) bin/
+          cp $(cabal list-bin ff3-benchmark) bin/
+          cp $(cabal list-bin ff3-stresstest) bin/
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: haskell-binaries
+          path: implementations/haskell/bin/
+
+  haskell-validate:
+    name: Haskell - NIST Validation
+    runs-on: ubuntu-latest
+    needs: haskell-build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: haskell-binaries
+          path: implementations/haskell/bin
+      - name: Make binaries executable
+        run: chmod +x implementations/haskell/bin/*
+      - name: Copy test vectors to standard location
+        run: |
+          mkdir -p /tmp/ff3-test-data
+          cp shared/test-vectors/nist_ff3_official_vectors.json /tmp/ff3-test-data/
+      - name: Run NIST validation
+        working-directory: implementations/haskell
+        run: ./bin/ff3-validate --vectors /tmp/ff3-test-data/nist_ff3_official_vectors.json
+
+  haskell-benchmark:
+    name: Haskell - Benchmarks
+    runs-on: ubuntu-latest
+    needs: haskell-validate
+    if: github.event.inputs.run_benchmarks == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: haskell-binaries
+          path: implementations/haskell/bin
+      - name: Make binaries executable
+        run: chmod +x implementations/haskell/bin/*
+      - name: Run benchmarks
+        working-directory: implementations/haskell
+        run: ./bin/ff3-benchmark --iterations 50000 --warmup 5000 --json-out haskell-benchmark.json
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: haskell-benchmark-results
+          path: implementations/haskell/haskell-benchmark.json
+
+  # ============================================================================
+  # SWIFT IMPLEMENTATION
+  # ============================================================================
+  swift-build:
+    name: Swift - Build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.languages == '' || github.event.inputs.languages == 'all' || contains(github.event.inputs.languages, 'swift')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift via swiftly
+        run: |
+          curl -O https://download.swift.org/swiftly/linux/swiftly-x86_64.tar.gz
+          tar zxf swiftly-x86_64.tar.gz
+          ./swiftly init --quiet-shell-followup
+          echo '. "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"' >> $HOME/.bashrc
+          bash -lc '. ~/.bashrc && swiftly install latest'
+      - name: Build Swift
+        working-directory: implementations/swift
+        run: bash -lc '. ~/.bashrc && swift build --build-tests'
+      - name: Run unit tests
+        working-directory: implementations/swift
+        run: bash -lc '. ~/.bashrc && swift test'
+      - name: Build release binaries
+        working-directory: implementations/swift
+        run: bash -lc '. ~/.bashrc && swift build -c release'
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: swift-binaries
+          path: implementations/swift/.build/release/FF3*
+
+  swift-validate:
+    name: Swift - NIST Validation
+    runs-on: ubuntu-latest
+    needs: swift-build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift via swiftly
+        run: |
+          curl -O https://download.swift.org/swiftly/linux/swiftly-x86_64.tar.gz
+          tar zxf swiftly-x86_64.tar.gz
+          ./swiftly init --quiet-shell-followup
+          echo '. "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"' >> $HOME/.bashrc
+          bash -lc '. ~/.bashrc && swiftly install latest'
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: swift-binaries
+          path: implementations/swift/.build/release
+      - name: Make binaries executable
+        run: chmod +x implementations/swift/.build/release/FF3*
+      - name: Copy test vectors to standard location
+        run: |
+          mkdir -p /tmp/ff3-test-data
+          cp shared/test-vectors/nist_ff3_official_vectors.json /tmp/ff3-test-data/
+      - name: Run NIST validation
+        working-directory: implementations/swift
+        run: bash -lc '. ~/.bashrc && ./.build/release/FF3Validate --vectors /tmp/ff3-test-data/nist_ff3_official_vectors.json'
+
+  swift-benchmark:
+    name: Swift - Benchmarks
+    runs-on: ubuntu-latest
+    needs: swift-validate
+    if: github.event.inputs.run_benchmarks == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift via swiftly
+        run: |
+          curl -O https://download.swift.org/swiftly/linux/swiftly-x86_64.tar.gz
+          tar zxf swiftly-x86_64.tar.gz
+          ./swiftly init --quiet-shell-followup
+          echo '. "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"' >> $HOME/.bashrc
+          bash -lc '. ~/.bashrc && swiftly install latest'
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: swift-binaries
+          path: implementations/swift/.build/release
+      - name: Make binaries executable
+        run: chmod +x implementations/swift/.build/release/FF3*
+      - name: Run benchmarks
+        working-directory: implementations/swift
+        run: bash -lc '. ~/.bashrc && ./.build/release/FF3Benchmark --iterations 50000 --warmup 5000 --alphabet digits --cases enc,dec,roundtrip'
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: swift-benchmark-results
+          path: implementations/swift/swift-benchmark.json
+
+  # ============================================================================
+  # ADA IMPLEMENTATION
+  # ============================================================================
+  ada-build:
+    name: Ada - Build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.languages == '' || github.event.inputs.languages == 'all' || contains(github.event.inputs.languages, 'ada')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache Alire
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/bin/alr
+            ~/.cache/alire
+          key: ${{ runner.os }}-alire-2.1.0
+          restore-keys: |
+            ${{ runner.os }}-alire-
+      - name: Install GNAT and Alire
+        run: |
+          sudo apt-get update && sudo apt-get install -y gnat gprbuild
+          if [ ! -f "/usr/local/bin/alr" ]; then
+            curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.0/alr-2.1.0-bin-x86_64-linux.zip
+            unzip alr.zip -d alr && sudo mv alr/bin/alr /usr/local/bin
+          fi
+      - name: Build Ada
+        working-directory: implementations/ada
+        run: alr -n build
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ada-binaries
+          path: implementations/ada/build/bin/ff3_*
+
+  ada-validate:
+    name: Ada - NIST Validation
+    runs-on: ubuntu-latest
+    needs: ada-build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: ada-binaries
+          path: implementations/ada/build/bin
+      - name: Make binaries executable
+        run: chmod +x implementations/ada/build/bin/ff3_*
+      - name: Copy test vectors to working directory
+        working-directory: implementations/ada
+        run: cp ../../shared/test-vectors/nist_ff3_official_vectors.json ./nist_ff3_official_vectors.json
+      - name: Run NIST validation
+        working-directory: implementations/ada
+        run: ./build/bin/ff3_validate
+
+  ada-benchmark:
+    name: Ada - Benchmarks
+    runs-on: ubuntu-latest
+    needs: ada-validate
+    if: github.event.inputs.run_benchmarks == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: ada-binaries
+          path: implementations/ada/build/bin
+      - name: Make binaries executable
+        run: chmod +x implementations/ada/build/bin/ff3_*
+      - name: Run benchmarks
+        working-directory: implementations/ada
+        run: ./build/bin/ff3_benchmark --iterations 50000 --warmup 5000
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ada-benchmark-results
+          path: implementations/ada/ada-benchmark.json
+
+  # ============================================================================
+  # ERLANG IMPLEMENTATION
+  # ============================================================================
+  erlang-build:
+    name: Erlang - Build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.languages == '' || github.event.inputs.languages == 'all' || contains(github.event.inputs.languages, 'erlang')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Erlang and rebar3
+        run: |
+          sudo apt-get update && sudo apt-get install -y erlang
+          wget https://github.com/erlang/rebar3/releases/download/3.23.0/rebar3
+          chmod +x rebar3
+          sudo mv rebar3 /usr/local/bin/
+      - name: Build Erlang library
+        working-directory: implementations/erlang
+        run: make compile
+      - name: Run unit tests
+        working-directory: implementations/erlang
+        run: make test
+      - name: Build CLI escripts
+        working-directory: implementations/erlang
+        run: make escripts
+      - name: Upload CLI binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: erlang-binaries
+          path: implementations/erlang/_build/default/bin/*
+
+  erlang-validate:
+    name: Erlang - NIST Validation
+    runs-on: ubuntu-latest
+    needs: erlang-build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Erlang and rebar3
+        run: |
+          sudo apt-get update && sudo apt-get install -y erlang
+          wget https://github.com/erlang/rebar3/releases/download/3.23.0/rebar3
+          chmod +x rebar3
+          sudo mv rebar3 /usr/local/bin/
+      - name: Compile Erlang dependencies and rebuild escripts
+        working-directory: implementations/erlang
+        run: |
+          echo "=== Compiling dependencies ==="
+          rebar3 compile
+          echo "=== Checking if JSX was compiled ==="
+          ls -la _build/default/lib/jsx/ebin/ || echo "JSX ebin directory not found!"
+          echo "=== Building escripts ==="
+          make escripts
+          echo "=== Checking escript contents for JSX ==="
+          unzip -l _build/default/bin/ff3_validate | grep -E "(jsx|ff3)" || echo "No JSX found in escript!"
+      - name: Copy test vectors to standard location
+        run: |
+          mkdir -p /tmp/ff3-test-data
+          cp shared/test-vectors/nist_ff3_official_vectors.json /tmp/ff3-test-data/
+      - name: Run NIST validation
+        working-directory: implementations/erlang
+        run: ERL_LIBS=_build/default/lib ./_build/default/bin/ff3_validate --vectors /tmp/ff3-test-data/nist_ff3_official_vectors.json
+
+  erlang-benchmark:
+    name: Erlang - Benchmarks
+    runs-on: ubuntu-latest
+    needs: erlang-validate
+    if: github.event.inputs.run_benchmarks == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Erlang and rebar3
+        run: |
+          sudo apt-get update && sudo apt-get install -y erlang
+          wget https://github.com/erlang/rebar3/releases/download/3.23.0/rebar3
+          chmod +x rebar3
+          sudo mv rebar3 /usr/local/bin/
+      - name: Compile Erlang dependencies and rebuild escripts
+        working-directory: implementations/erlang
+        run: |
+          rebar3 compile
+          make escripts
+      - name: Run benchmarks
+        working-directory: implementations/erlang
+        run: ERL_LIBS=_build/default/lib ./_build/default/bin/ff3_bench --iterations 50000 --warmup 5000 --alphabet digits --cases enc,dec,roundtrip
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: erlang-benchmark-results
+          path: implementations/erlang/erlang-benchmark.json

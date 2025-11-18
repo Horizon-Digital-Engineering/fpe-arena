@@ -1,0 +1,26 @@
+# Binaries
+/ff3-bench
+/ff3-cli
+*.exe
+*.out
+
+# Test binaries
+*.test
+
+# Build output
+/bin/
+
+# Vendor directory (if not using vendoring)
+vendor/
+
+# Go module cache (keep pkg/ff3/ source code)
+pkg/mod/
+pkg/sumdb/
+
+# Log files
+*.log
+
+# Editor/OS files
+.DS_Store
+Thumbs.db
+*~

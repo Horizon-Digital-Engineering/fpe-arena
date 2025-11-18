@@ -1,0 +1,155 @@
+name: SonarCloud Analysis
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  sonarcloud:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    env:
+      BUILD_WRAPPER_OUT_DIR: build-wrapper-output
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Shallow clones should be disabled for better analysis
+
+    # Setup multiple language environments
+    # Commenting out to focus on C++ only
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '25'
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0'
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@v1
+      with:
+        toolchain: stable
+
+    # Install C++ build tools and SonarCloud build wrapper
+    - name: Install build essentials
+      run: |
+        sudo apt-get install -y build-essential cmake
+
+    - name: Install SonarCloud build wrapper
+      uses: SonarSource/sonarqube-scan-action/install-build-wrapper@v6
+
+    # Build and test supported implementations
+    - name: Build and test Python
+      working-directory: implementations/python
+      run: |
+        if [ -f "requirements.txt" ]; then
+          pip install -r requirements.txt
+        fi
+        if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
+          pip install -e .
+        fi
+        # Run tests with coverage if available
+        if [ -f "pytest.ini" ] || [ -f "pyproject.toml" ]; then
+          pip install pytest pytest-cov
+          pytest --cov=. --cov-report=xml:coverage.xml || true
+        fi
+
+    - name: Build and test JavaScript
+      working-directory: implementations/javascript
+      run: |
+        if [ -f "package.json" ]; then
+          npm install
+          npm test || true
+          npm run coverage || true
+        fi
+
+    - name: Build and test Java
+      working-directory: implementations/java
+      run: |
+        chmod +x gradlew
+        ./gradlew build test || true
+
+    - name: Build and test Go
+      working-directory: implementations/go
+      run: |
+        if [ -f "go.mod" ]; then
+          go mod download
+          go test -v -coverprofile=coverage.out ./... || true
+        fi
+
+    - name: Build and test .NET
+      working-directory: implementations/dotnet
+      run: |
+        if [ -f "*.sln" ] || [ -f "*.csproj" ]; then
+          dotnet restore
+          dotnet build
+          dotnet test --logger trx --collect:"XPlat Code Coverage" || true
+        fi
+
+    - name: Build and test C++ with SonarCloud build wrapper
+      working-directory: implementations/cpp
+      run: |
+        echo "=== Debugging C++ build wrapper ==="
+        echo "Current directory: $(pwd)"
+        echo "BUILD_WRAPPER_OUT_DIR: ${{ env.BUILD_WRAPPER_OUT_DIR }}"
+        echo "Files in directory:"
+        ls -la
+        echo ""
+
+        if [ -f "CMakeLists.txt" ]; then
+          echo "Using CMake build"
+          mkdir -p build
+          cd build
+          cmake ..
+          echo "About to run build wrapper..."
+          echo "Build wrapper output dir: ../${{ env.BUILD_WRAPPER_OUT_DIR }}"
+          build-wrapper-linux-x86-64 --out-dir ../${{ env.BUILD_WRAPPER_OUT_DIR }} make || true
+          cd ..
+          echo "Contents of build wrapper output directory:"
+          ls -la ${{ env.BUILD_WRAPPER_OUT_DIR }}/ || echo "Directory does not exist"
+        elif [ -f "Makefile" ]; then
+          echo "Using Makefile build"
+          build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} make || true
+          echo "Contents of build wrapper output directory:"
+          ls -la ${{ env.BUILD_WRAPPER_OUT_DIR }}/ || echo "Directory does not exist"
+        fi
+
+    - name: Build and test Rust
+      working-directory: implementations/rust
+      run: |
+        if [ -f "Cargo.toml" ]; then
+          cargo build || true
+          cargo test || true
+        fi
+
+    # SonarCloud Scan
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarqube-scan-action@v6
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      with:
+        args: >
+          -Dsonar.verbose=true

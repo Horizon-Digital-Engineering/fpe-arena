@@ -1,0 +1,33 @@
+# NOTICE
+
+This project implements an experimental Format Preserving Encryption FF3 algorithm as specified in NIST SP 800-38G.
+
+## References and Attribution
+
+### NIST Specification
+- **NIST Special Publication 800-38G** - Recommendation for Block Cipher Modes of Operation: Methods for Format-Preserving Encryption
+- **Authors**: Morris Dworkin
+- **Published**: March 2016
+- **Source**: https://doi.org/10.6028/NIST.SP.800-38G
+
+### Implementation References
+- **Clean-room implementation** - Built directly from NIST SP 800-38G specification
+- **Academic Papers**: Cryptanalysis and security research papers on FF3-1
+- **FIPS 197**: Advanced Encryption Standard (AES) specification
+- **Educational resources**: Format-preserving encryption implementation studies
+
+### Test Framework
+- Algorithm validation based on NIST SP 800-38G patterns
+- Educational test cases for algorithm study
+
+## Cryptographic Acknowledgments
+
+FF3-1 algorithm specified by NIST based on academic research in format-preserving encryption.
+
+## License
+
+Copyright 2025 Horizon Digital Engineering
+
+This project is provided under the Business Source License 1.1. See `LICENSE`
+for the complete grant, production-use restrictions, change date, and fallback
+to Apache 2.0 terms.

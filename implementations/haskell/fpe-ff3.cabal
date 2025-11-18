@@ -1,0 +1,101 @@
+cabal-version:      2.4
+name:               fpe-ff3
+version:            0.1.0.0
+synopsis:           Experimental FF3 Format Preserving Encryption implementation for research
+description:        Educational Haskell implementation of FF3 FPE algorithm.
+                    ⚠️ FF3 was withdrawn by NIST due to security vulnerabilities.
+                    This implementation is for educational and research purposes only.
+homepage:           https://github.com/horizondigitalengineering/fpe-ff3
+license:            OtherLicense
+license-file:       LICENSE
+author:             Horizon Digital Engineering
+maintainer:         engineering@horizondigital.dev
+category:           Cryptography, Research
+build-type:         Simple
+extra-source-files: README.md
+
+common warnings
+    ghc-options: -Wall -O2
+
+library
+    import:           warnings
+    exposed-modules:  FF3.Core
+                    , FF3.Alphabets
+                    , FF3.API
+                    , FF3
+    build-depends:    base >=4.16.4.0 && <5.0
+                    , bytestring
+                    , crypton
+                    , integer-gmp
+                    , containers
+                    , vector
+                    , aeson
+                    , text
+    hs-source-dirs:   src
+    default-language: Haskell2010
+
+executable ff3-cli
+    import:           warnings
+    main-is:          CLI.hs
+    build-depends:    base >=4.16.4.0 && <5.0
+                    , fpe-ff3
+                    , bytestring
+                    , text
+                    , optparse-applicative
+                    , haskeline
+    hs-source-dirs:   app
+    default-language: Haskell2010
+
+executable ff3-validate
+    import:           warnings
+    main-is:          Validate.hs
+    build-depends:    base >=4.16.4.0 && <5.0
+                    , fpe-ff3
+                    , bytestring
+                    , aeson
+                    , text
+                    , filepath
+                    , directory
+    hs-source-dirs:   app
+    default-language: Haskell2010
+
+executable ff3-benchmark
+    import:           warnings
+    main-is:          Benchmark.hs
+    build-depends:    base >=4.16.4.0 && <5.0
+                    , fpe-ff3
+                    , bytestring
+                    , aeson
+                    , text
+                    , time
+                    , random
+                    , deepseq
+    hs-source-dirs:   app
+    default-language: Haskell2010
+
+executable ff3-stresstest
+    import:           warnings
+    main-is:          StressTest.hs
+    build-depends:    base >=4.16.4.0 && <5.0
+                    , fpe-ff3
+                    , bytestring
+                    , containers
+                    , text
+                    , random
+                    , time
+                    , split
+    hs-source-dirs:   app
+    default-language: Haskell2010
+
+test-suite fpe-ff3-test
+    import:           warnings
+    default-language: Haskell2010
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Main.hs
+    build-depends:    base >=4.16.4.0 && <5.0
+                    , fpe-ff3
+                    , hspec
+                    , bytestring
+                    , aeson
+                    , text

@@ -1,0 +1,4 @@
+dependencies {
+    // Core library has no external dependencies
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+}

@@ -1,0 +1,22 @@
+[package]
+name = "fpe-ff3"
+version = "0.1.0"
+edition = "2021"
+description = "Experimental FF3 implementation for research and educational purposes"
+license = "BUSL-1.1"
+authors = ["Horizon Digital Engineering"]
+
+[dependencies]
+aes = "0.8"
+num-bigint = "0.4"
+num-traits = "0.2"
+num-integer = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+hex = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.8"
+num_cpus = "1.16"
+
+[dev-dependencies]
+criterion = "0.5"

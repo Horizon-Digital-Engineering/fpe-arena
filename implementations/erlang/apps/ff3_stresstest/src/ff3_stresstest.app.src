@@ -1,0 +1,7 @@
+{application, ff3_stresstest,
+ [{description, "FF3 Comprehensive Stress Test Tool"},
+  {vsn, "1.0.0"},
+  {modules, [ff3_stresstest_main]},
+  {registered, []},
+  {applications, [kernel, stdlib, ff3]}
+ ]}.

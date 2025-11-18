@@ -1,0 +1,14 @@
+plugins {
+    id 'application'
+}
+
+dependencies {
+    implementation project(':ff3-core')
+
+    // JSON support for output and config file parsing
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.16.0'
+}
+
+application {
+    mainClass = 'dev.horizondigital.ff3.benchmark.FF3Benchmark'
+}

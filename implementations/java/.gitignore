@@ -1,0 +1,26 @@
+# Gradle build output
+/build/
+*/build/
+.gradle/
+
+# Maven build output
+/target/
+
+# Compiled class files
+*.class
+
+# JAR/WAR/EAR files
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+*.war
+*.ear
+
+# IDE files
+*.iml
+.idea/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+*~

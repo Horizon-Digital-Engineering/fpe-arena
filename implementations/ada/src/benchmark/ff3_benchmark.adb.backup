@@ -1,0 +1,488 @@
+-- FF3 Performance Benchmark Tool with Full CLI Support and JSON Output
+-- Measures FF3 encryption/decryption performance
+
+with Ada.Text_IO; use Ada.Text_IO;
+with Ada.Real_Time; use Ada.Real_Time;
+with Ada.Command_Line; use Ada.Command_Line;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+with Ada.Strings.Fixed; use Ada.Strings.Fixed;
+with Ada.Calendar;
+with Ada.Calendar.Formatting;
+with GNAT.OS_Lib;
+with GNATCOLL.JSON; use GNATCOLL.JSON;
+
+with FF3_Types; use FF3_Types;
+with FF3_API; use FF3_API;
+
+procedure FF3_Benchmark is
+
+   -- Configuration
+   type Config_Type is record
+      Alphabet      : Unbounded_String := To_Unbounded_String ("digits");
+      Radix         : Natural := 10;
+      Lengths       : String (1 .. 100) := [others => ' '];
+      Cases         : String (1 .. 100) := [others => ' '];
+      Iterations    : Natural := 100_000;
+      Warmup        : Natural := 10_000;
+      Key_Hex       : String (1 .. 32) := "EF4359D8D580AA4F7F036D6F04FC6A94";
+      Tweak_Hex     : String (1 .. 16) := "D8E7920AFA330A73";
+      Seed          : Natural := 42;
+      Quick         : Boolean := False;
+      Verbose       : Boolean := False;
+      JSON_Out      : Unbounded_String := Null_Unbounded_String;
+   end record;
+
+   Config : Config_Type;
+
+   procedure Print_Help is
+   begin
+      Put_Line ("FF3 Performance Benchmark Tool");
+      Put_Line ("");
+      Put_Line ("Usage: ff3_benchmark [OPTIONS]");
+      Put_Line ("");
+      Put_Line ("Options:");
+      Put_Line ("  --config <file>      Load configuration from JSON file");
+      Put_Line ("  --alphabet <name>    Alphabet to use (default: digits)");
+      Put_Line ("  --iterations <n>     Number of iterations (default: 100000)");
+      Put_Line ("  --warmup <n>         Warmup iterations (default: 10000)");
+      Put_Line ("  --key <hex>          Hex-encoded key (default: EF4359D8...)");
+      Put_Line ("  --tweak <hex>        Hex-encoded tweak (default: D8E7920A...)");
+      Put_Line ("  --seed <n>           Random seed (default: 42)");
+      Put_Line ("  --quick              Reduce iterations by 10x");
+      Put_Line ("  --json-out <file>    Write JSON output to file");
+      Put_Line ("  --verbose            Show progress messages");
+      Put_Line ("  -h, --help           Show this help message");
+      Put_Line ("");
+      Put_Line ("⚠️  FF3 was withdrawn by NIST due to security vulnerabilities.");
+      Put_Line ("   This tool is for educational and research purposes only.");
+   end Print_Help;
+
+   procedure Load_Config_File (Filename : String) is
+      Input_File : File_Type;
+      File_Contents : Unbounded_String;
+      Line : String (1 .. 4096);
+      Last : Natural;
+      JSON_Val : JSON_Value;
+   begin
+      -- Read entire file
+      Open (Input_File, In_File, Filename);
+      while not End_Of_File (Input_File) loop
+         Get_Line (Input_File, Line, Last);
+         Append (File_Contents, Line (1 .. Last));
+      end loop;
+      Close (Input_File);
+
+      -- Parse JSON
+      JSON_Val := Read (To_String (File_Contents));
+
+      -- Extract scalar fields
+      if Has_Field (JSON_Val, "alphabet") then
+         declare
+            Alphabet_Str : constant String := GNATCOLL.JSON.Get (JSON_Val, "alphabet");
+         begin
+            Config.Alphabet := To_Unbounded_String (Alphabet_Str);
+         end;
+      end if;
+
+      if Has_Field (JSON_Val, "radix") then
+         Config.Radix := GNATCOLL.JSON.Get (JSON_Val, "radix");
+      end if;
+
+      if Has_Field (JSON_Val, "iterations") then
+         Config.Iterations := GNATCOLL.JSON.Get (JSON_Val, "iterations");
+      end if;
+
+      if Has_Field (JSON_Val, "warmup") then
+         Config.Warmup := GNATCOLL.JSON.Get (JSON_Val, "warmup");
+      end if;
+
+      if Has_Field (JSON_Val, "key") then
+         declare
+            Key_Str : constant String := GNATCOLL.JSON.Get (JSON_Val, "key");
+         begin
+            Config.Key_Hex (1 .. Key_Str'Length) := Key_Str;
+         end;
+      end if;
+
+      if Has_Field (JSON_Val, "tweak") then
+         declare
+            Tweak_Str : constant String := GNATCOLL.JSON.Get (JSON_Val, "tweak");
+         begin
+            Config.Tweak_Hex (1 .. Tweak_Str'Length) := Tweak_Str;
+         end;
+      end if;
+
+      if Has_Field (JSON_Val, "seed") then
+         Config.Seed := GNATCOLL.JSON.Get (JSON_Val, "seed");
+      end if;
+
+      -- Extract lengths array
+      if Has_Field (JSON_Val, "lengths") then
+         declare
+            Lengths_Arr : constant JSON_Array := GNATCOLL.JSON.Get (JSON_Val, "lengths");
+            Lengths_Str : Unbounded_String;
+         begin
+            for I in 1 .. Length (Lengths_Arr) loop
+               if I > 1 then
+                  Ada.Strings.Unbounded.Append (Lengths_Str, ",");
+               end if;
+               Ada.Strings.Unbounded.Append (Lengths_Str, Integer'Image (GNATCOLL.JSON.Get (GNATCOLL.JSON.Get (Lengths_Arr, I))));
+            end loop;
+            Config.Lengths (1 .. Ada.Strings.Unbounded.Length (Lengths_Str)) := To_String (Lengths_Str);
+         end;
+      end if;
+
+      -- Extract cases array
+      if Has_Field (JSON_Val, "cases") then
+         declare
+            Cases_Arr : constant JSON_Array := GNATCOLL.JSON.Get (JSON_Val, "cases");
+            Cases_Str : Unbounded_String;
+         begin
+            for I in 1 .. Length (Cases_Arr) loop
+               if I > 1 then
+                  Ada.Strings.Unbounded.Append (Cases_Str, ",");
+               end if;
+               declare
+                  Case_Val : constant JSON_Value := GNATCOLL.JSON.Get (Cases_Arr, I);
+                  Case_Str : constant String := GNATCOLL.JSON.Get (Case_Val);
+               begin
+                  Ada.Strings.Unbounded.Append (Cases_Str, Case_Str);
+               end;
+            end loop;
+            Config.Cases (1 .. Ada.Strings.Unbounded.Length (Cases_Str)) := To_String (Cases_Str);
+         end;
+      end if;
+
+   exception
+      when E : others =>
+         Put_Line ("ERR: Failed to load config file: " & Filename);
+         GNAT.OS_Lib.OS_Exit (2);
+   end Load_Config_File;
+
+   procedure Parse_Args is
+      I : Natural := 1;
+      Config_File : Unbounded_String := Null_Unbounded_String;
+   begin
+      while I <= Argument_Count loop
+         declare
+            Arg : constant String := Argument (I);
+         begin
+            if Arg = "-h" or Arg = "--help" then
+               Print_Help;
+               GNAT.OS_Lib.OS_Exit (0);
+            elsif Arg = "--quick" then
+               Config.Quick := True;
+            elsif Arg = "--verbose" then
+               Config.Verbose := True;
+            elsif Arg = "--config" and I < Argument_Count then
+               I := I + 1;
+               Config_File := To_Unbounded_String (Argument (I));
+            elsif Arg = "--alphabet" and I < Argument_Count then
+               I := I + 1;
+               Config.Alphabet := To_Unbounded_String (Argument (I));
+            elsif Arg = "--iterations" and I < Argument_Count then
+               I := I + 1;
+               Config.Iterations := Natural'Value (Argument (I));
+            elsif Arg = "--warmup" and I < Argument_Count then
+               I := I + 1;
+               Config.Warmup := Natural'Value (Argument (I));
+            elsif Arg = "--key" and I < Argument_Count then
+               I := I + 1;
+               Config.Key_Hex := Argument (I);
+            elsif Arg = "--tweak" and I < Argument_Count then
+               I := I + 1;
+               Config.Tweak_Hex := Argument (I);
+            elsif Arg = "--json-out" and I < Argument_Count then
+               I := I + 1;
+               Config.JSON_Out := To_Unbounded_String (Argument (I));
+            end if;
+         end;
+         I := I + 1;
+      end loop;
+
+      -- Load config file if specified
+      if Config_File /= Null_Unbounded_String then
+         Load_Config_File (To_String (Config_File));
+      end if;
+
+      -- Apply quick mode
+      if Config.Quick then
+         Config.Iterations := Config.Iterations / 10;
+         Config.Warmup := Config.Warmup / 10;
+      end if;
+   end Parse_Args;
+
+   function Hex_To_Byte (C : Character) return Byte is
+   begin
+      case C is
+         when '0' .. '9' => return Character'Pos (C) - Character'Pos ('0');
+         when 'a' .. 'f' => return Character'Pos (C) - Character'Pos ('a') + 10;
+         when 'A' .. 'F' => return Character'Pos (C) - Character'Pos ('A') + 10;
+         when others => return 0;
+      end case;
+   end Hex_To_Byte;
+
+   function Parse_Hex_Key (Hex : String) return Byte_Array is
+      Result : Byte_Array (1 .. Hex'Length / 2);
+   begin
+      for I in Result'Range loop
+         declare
+            Idx : constant Positive := (I - 1) * 2 + Hex'First;
+         begin
+            Result (I) := Hex_To_Byte (Hex (Idx)) * 16 + Hex_To_Byte (Hex (Idx + 1));
+         end;
+      end loop;
+      return Result;
+   end Parse_Hex_Key;
+
+   function Parse_Hex_Tweak (Hex : String) return FF3_Tweak is
+      Result : FF3_Tweak;
+   begin
+      for I in Result'Range loop
+         declare
+            Idx : constant Positive := (I - 1) * 2 + Hex'First;
+         begin
+            Result (I) := Hex_To_Byte (Hex (Idx)) * 16 + Hex_To_Byte (Hex (Idx + 1));
+         end;
+      end loop;
+      return Result;
+   end Parse_Hex_Tweak;
+
+   function To_JSON_Timestamp return String is
+      use Ada.Calendar;
+      use Ada.Calendar.Formatting;
+      Now : constant Ada.Calendar.Time := Ada.Calendar.Clock;
+   begin
+      return Image (Now, Time_Zone => 0) & "Z";
+   end To_JSON_Timestamp;
+
+   procedure Output_JSON (
+      Enc_NS_Per_Op : Long_Long_Integer;
+      Enc_Ops_Per_Sec : Natural;
+      Dec_NS_Per_Op : Long_Long_Integer;
+      Dec_Ops_Per_Sec : Natural)
+   is
+      Output_File : File_Type;
+      Use_File : constant Boolean := Config.JSON_Out /= Null_Unbounded_String;
+
+      -- Helper procedure to output to either stdout or file
+      procedure Write_Line (S : String) is
+      begin
+         if Use_File then
+            Put_Line (Output_File, S);
+         else
+            Put_Line (S);
+         end if;
+      end Write_Line;
+
+   begin
+      if Use_File then
+         Create (Output_File, Out_File, To_String (Config.JSON_Out));
+      end if;
+
+      -- Build JSON output
+      Write_Line ("{");
+      Write_Line ("  ""metadata"": {");
+      Write_Line ("    ""version"": ""1.0"",");
+      Write_Line ("    ""timestamp"": """ & To_JSON_Timestamp & """,");
+      Write_Line ("    ""language"": ""ada/spark"",");
+      Write_Line ("    ""runtime"": ""GNAT"",");
+      Write_Line ("    ""platform"": {");
+      Write_Line ("      ""os"": ""linux"",");
+      Write_Line ("      ""arch"": ""x86_64"",");
+      Write_Line ("      ""cpu"": ""unknown"",");
+      Write_Line ("      ""cores"": 1");
+      Write_Line ("    }");
+      Write_Line ("  },");
+      Write_Line ("  ""configuration"": {");
+      Write_Line ("    ""seed"":" & Natural'Image (Config.Seed) & ",");
+      Write_Line ("    ""warmup_iterations"":" & Natural'Image (Config.Warmup));
+      Write_Line ("  },");
+      Write_Line ("  ""benchmarks"": [");
+
+      -- Encryption benchmark
+      Write_Line ("    {");
+      Write_Line ("      ""name"": ""enc_len16_radix10"",");
+      Write_Line ("      ""test_case"": ""enc"",");
+      Write_Line ("      ""parameters"": {");
+      Write_Line ("        ""alphabet"": """ & To_String (Config.Alphabet) & """,");
+      Write_Line ("        ""radix"": 10,");
+      Write_Line ("        ""length"": 16,");
+      Write_Line ("        ""key_bits"": 128,");
+      Write_Line ("        ""key_fingerprint"": """ & Config.Key_Hex (1 .. 8) & """,");
+      Write_Line ("        ""tweak"": """ & Config.Tweak_Hex & """");
+      Write_Line ("      },");
+      Write_Line ("      ""iterations"":" & Natural'Image (Config.Iterations) & ",");
+      Write_Line ("      ""elapsed_ns"":" & Long_Long_Integer'Image (Enc_NS_Per_Op * Long_Long_Integer (Config.Iterations)) & ",");
+      Write_Line ("      ""ns_per_op"":" & Long_Long_Integer'Image (Enc_NS_Per_Op) & ",");
+      Write_Line ("      ""ops_per_sec"":" & Natural'Image (Enc_Ops_Per_Sec) & ",");
+      Write_Line ("      ""checksum"": ""00000000""");
+      Write_Line ("    },");
+
+      -- Decryption benchmark
+      Write_Line ("    {");
+      Write_Line ("      ""name"": ""dec_len16_radix10"",");
+      Write_Line ("      ""test_case"": ""dec"",");
+      Write_Line ("      ""parameters"": {");
+      Write_Line ("        ""alphabet"": """ & To_String (Config.Alphabet) & """,");
+      Write_Line ("        ""radix"": 10,");
+      Write_Line ("        ""length"": 16,");
+      Write_Line ("        ""key_bits"": 128,");
+      Write_Line ("        ""key_fingerprint"": """ & Config.Key_Hex (1 .. 8) & """,");
+      Write_Line ("        ""tweak"": """ & Config.Tweak_Hex & """");
+      Write_Line ("      },");
+      Write_Line ("      ""iterations"":" & Natural'Image (Config.Iterations) & ",");
+      Write_Line ("      ""elapsed_ns"":" & Long_Long_Integer'Image (Dec_NS_Per_Op * Long_Long_Integer (Config.Iterations)) & ",");
+      Write_Line ("      ""ns_per_op"":" & Long_Long_Integer'Image (Dec_NS_Per_Op) & ",");
+      Write_Line ("      ""ops_per_sec"":" & Natural'Image (Dec_Ops_Per_Sec) & ",");
+      Write_Line ("      ""checksum"": ""00000000""");
+      Write_Line ("    }");
+      Write_Line ("  ],");
+      Write_Line ("  ""summary"": {");
+      Write_Line ("    ""total_tests"": 2,");
+
+      declare
+         Total_Duration : constant Float :=
+            Float (Enc_NS_Per_Op + Dec_NS_Per_Op) * Float (Config.Iterations) / 1_000_000_000.0;
+      begin
+         Write_Line ("    ""total_duration_sec"":" & Float'Image (Total_Duration) & ",");
+      end;
+
+      Write_Line ("    ""checksum"": ""00000000""");
+      Write_Line ("  }");
+      Write_Line ("}");
+
+      if Use_File then
+         Close (Output_File);
+      end if;
+   end Output_JSON;
+
+begin
+   -- Parse command-line arguments
+   Parse_Args;
+
+   -- Verbose human output to stderr
+   if Config.Verbose then
+      Put_Line (Standard_Error, "🚀 FF3 Performance Benchmark Tool v1.0.0");
+      Put_Line (Standard_Error, "========================================");
+      Put_Line (Standard_Error, "");
+      Put_Line (Standard_Error, "⚠️  FF3 was WITHDRAWN by NIST due to security vulnerabilities.");
+      Put_Line (Standard_Error, "    This benchmark is for EDUCATIONAL and RESEARCH purposes only.");
+      Put_Line (Standard_Error, "");
+      Put_Line (Standard_Error, "🔧 Configuration:");
+      Put_Line (Standard_Error, "   Algorithm: FF3 (" & To_String (Config.Alphabet) & " radix)");
+      Put_Line (Standard_Error, "   Key: " & Natural'Image (Config.Key_Hex'Length * 4) & "-bit AES");
+      Put_Line (Standard_Error, "   Platform: Ada/SPARK");
+      Put_Line (Standard_Error, "   Operations per test:" & Natural'Image (Config.Iterations));
+      Put_Line (Standard_Error, "");
+   end if;
+
+   -- Run simple benchmark
+   declare
+      Cipher : FF3_String_Cipher;
+      Result : String_Result;
+      Key : constant Byte_Array := Parse_Hex_Key (Config.Key_Hex);
+      Tweak : constant FF3_Tweak := Parse_Hex_Tweak (Config.Tweak_Hex);
+
+      Test_Cases : constant array (1 .. 3) of String (1 .. 16) := [
+         "8901234567890000",
+         "1234567890123456",
+         "5678901234567890"
+      ];
+
+      Start_Time, End_Time : Time;
+      Elapsed_Time : Time_Span;
+      Enc_NS_Per_Op, Dec_NS_Per_Op : Long_Long_Integer;
+      Enc_Ops_Per_Sec, Dec_Ops_Per_Sec : Natural;
+   begin
+      -- Initialize cipher
+      if To_String (Config.Alphabet) = "digits" then
+         Create_Digits_Cipher (Cipher, Key, Tweak, Result);
+      else
+         Put_Line (Standard_Error, "⚠️  Only digits alphabet implemented for now");
+         return;
+      end if;
+
+      if Result /= FF3_API.Success then
+         Put_Line (Standard_Error, "❌ Cipher initialization failed");
+         return;
+      end if;
+
+      -- Warmup
+      if Config.Verbose then
+         Put_Line (Standard_Error, "📊 Running warmup...");
+      end if;
+
+      declare
+         Dummy_Output : String (1 .. 16);
+         Dummy_Result : String_Result;
+      begin
+         for I in 1 .. Config.Warmup loop
+            Encrypt_String (Cipher, Test_Cases (1), Dummy_Output, Dummy_Result);
+         end loop;
+      end;
+
+      -- Benchmark encryption
+      if Config.Verbose then
+         Put_Line (Standard_Error, "   Benchmarking encryption...");
+      end if;
+
+      Start_Time := Clock;
+      for I in 1 .. Config.Iterations loop
+         declare
+            Ciphertext : String (Test_Cases (1)'Range);
+            Cipher_Result : String_Result;
+         begin
+            Encrypt_String (Cipher, Test_Cases ((I mod 3) + 1), Ciphertext, Cipher_Result);
+         end;
+      end loop;
+      End_Time := Clock;
+
+      Elapsed_Time := End_Time - Start_Time;
+      Enc_NS_Per_Op := Long_Long_Integer (Float (To_Duration (Elapsed_Time)) * 1_000_000_000.0 / Float (Config.Iterations));
+      Enc_Ops_Per_Sec := Natural (Float (Config.Iterations) / Float (To_Duration (Elapsed_Time)));
+
+      if Config.Verbose then
+         Put_Line (Standard_Error, "   Encrypt:   " & Long_Long_Integer'Image (Enc_NS_Per_Op) &
+                   " ns/op (" & Natural'Image (Enc_Ops_Per_Sec) & " ops/sec)");
+      end if;
+
+      -- Benchmark decryption
+      declare
+         Precomputed_CTs : array (Test_Cases'Range) of String (1 .. 16);
+         CT_Result : String_Result;
+      begin
+         for I in Test_Cases'Range loop
+            Encrypt_String (Cipher, Test_Cases (I), Precomputed_CTs (I), CT_Result);
+         end loop;
+
+         if Config.Verbose then
+            Put_Line (Standard_Error, "   Benchmarking decryption...");
+         end if;
+
+         Start_Time := Clock;
+         for I in 1 .. Config.Iterations loop
+            declare
+               Plaintext : String (Test_Cases (1)'Range);
+               PT_Result : String_Result;
+            begin
+               Decrypt_String (Cipher, Precomputed_CTs ((I mod 3) + 1), Plaintext, PT_Result);
+            end;
+         end loop;
+         End_Time := Clock;
+
+         Elapsed_Time := End_Time - Start_Time;
+         Dec_NS_Per_Op := Long_Long_Integer (Float (To_Duration (Elapsed_Time)) * 1_000_000_000.0 / Float (Config.Iterations));
+         Dec_Ops_Per_Sec := Natural (Float (Config.Iterations) / Float (To_Duration (Elapsed_Time)));
+
+         if Config.Verbose then
+            Put_Line (Standard_Error, "   Decrypt:   " & Long_Long_Integer'Image (Dec_NS_Per_Op) &
+                      " ns/op (" & Natural'Image (Dec_Ops_Per_Sec) & " ops/sec)");
+         end if;
+      end;
+
+      -- Output JSON results
+      Output_JSON (Enc_NS_Per_Op, Enc_Ops_Per_Sec, Dec_NS_Per_Op, Dec_Ops_Per_Sec);
+   end;
+
+end FF3_Benchmark;

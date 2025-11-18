@@ -1,0 +1,32 @@
+# Ada/Alire build artifacts
+/build/
+/obj/
+/bin/
+*.ali
+*.o
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Alire cache
+.alire/
+/alire/
+
+# Archives and downloads
+*.zip
+*.tar.gz
+
+# Logs
+*.log
+
+# Editor files
+*~
+.#*
+\#*#
+*.swp
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db

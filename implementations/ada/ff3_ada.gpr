@@ -1,0 +1,48 @@
+-- Ada FF3 Project File
+-- Clean Alire-based build with proper directory structure
+
+with "config/ff3_ada_config.gpr";
+with "gnatcoll";
+
+project FF3_Ada is
+   for Source_Dirs use ("src", "src/ff3", "src/cli", "src/validate", "src/benchmark", "src/stresstest", "tests/unit");
+   for Object_Dir use "build/obj";
+   for Exec_Dir   use "build/bin";
+
+   for Main use ("ff3_cli.adb", "ff3_validate.adb", "ff3_benchmark.adb", "ff3_stresstest.adb");
+
+   type Mode_Type is ("debug", "release");
+   Mode : Mode_Type := external ("BUILD_MODE", "debug");
+
+   package Compiler is
+      case Mode is
+         when "debug" =>
+            for Default_Switches ("Ada") use
+              ("-gnat2022",           -- Ada 2022
+               "-gnata",              -- assertions enabled
+               "-gnatwa",             -- all warnings
+               "-gnateE",             -- extra information in exceptions
+               "-g");                 -- debug info
+
+         when "release" =>
+            for Default_Switches ("Ada") use
+              ("-gnat2022",           -- Ada 2022
+               "-O2",                 -- optimize
+               "-gnatn",              -- inlining
+               "-gnatwa");            -- all warnings
+      end case;
+   end Compiler;
+
+   package Binder is
+      for Default_Switches ("Ada") use ("-E");
+   end Binder;
+
+   package Linker is
+      for Default_Switches ("Ada") use ();
+   end Linker;
+
+   package Ide is
+      for VCS_Kind use "Git";
+   end Ide;
+
+end FF3_Ada;

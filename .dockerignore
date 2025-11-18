@@ -1,0 +1,60 @@
+# Build artifacts and temporary files
+**/build/
+**/.build/
+**/target/
+**/dist/
+**/node_modules/
+**/.stack-work/
+
+# Swift Package Manager
+implementations/swift/.build/
+implementations/swift/Package.resolved
+
+# C++ build artifacts
+implementations/cpp/build/
+
+# Rust build artifacts
+implementations/rust/target/
+
+# .NET build artifacts
+implementations/dotnet/bin/
+implementations/dotnet/obj/
+
+# Java build artifacts
+implementations/java/build/
+implementations/java/.gradle/
+
+# Node.js artifacts
+implementations/javascript/node_modules/
+
+# Haskell artifacts
+implementations/haskell/.stack-work/
+
+# Erlang build artifacts
+implementations/erlang/ebin/
+implementations/erlang/*.dump
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+
+# Upload artifacts
+_upload_meta/
+repo-upload.zip
+
+# GitHub workflows (not needed in container)
+.github/

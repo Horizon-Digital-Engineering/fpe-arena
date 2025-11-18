@@ -1,0 +1,25 @@
+# Stack build artifacts
+/.stack-work/
+
+# Cabal build artifacts
+dist/
+dist-newstyle/
+
+# Compiled files
+*.hi
+*.o
+
+# Profiling and eventlog files
+*.prof
+*.aux
+*.hp
+*.eventlog
+
+# Test and output files
+*.test
+*.out
+
+# Editor/OS files
+.DS_Store
+Thumbs.db
+*~

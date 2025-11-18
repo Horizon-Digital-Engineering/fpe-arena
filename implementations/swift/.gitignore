@@ -1,0 +1,31 @@
+# Swift Package Manager
+.build/
+
+# Xcode
+*.xcodeproj
+*.xcworkspace
+build/
+DerivedData/
+
+# macOS
+.DS_Store
+
+# Swift specific
+*.swiftpm
+.swiftpm/
+
+# Test artifacts
+*.gcda
+*.gcno
+
+# IDE files
+.vscode/
+*.sublime-*
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# Build artifacts
+# (None currently - using SPM's .build/ directory)

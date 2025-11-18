@@ -1,0 +1,7 @@
+rootProject.name = 'ff3-java'
+
+include 'ff3-core'
+include 'ff3-cli'
+include 'ff3-validate'
+include 'ff3-stresstest'
+include 'ff3-benchmark'
