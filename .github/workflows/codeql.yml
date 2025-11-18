@@ -44,6 +44,8 @@ jobs:
       - name: Build Java implementation
         if: matrix.language == 'java'
         working-directory: implementations/java
+        env:
+          FF3_TEST_VECTORS_PATH: ${{ github.workspace }}/shared/test-vectors/nist_ff3_official_vectors.json
         run: |
           ./gradlew --no-daemon assemble
           ./gradlew --no-daemon test
