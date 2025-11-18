@@ -32,7 +32,21 @@ jobs:
           languages: ${{ matrix.language }}
 
       - name: Autobuild
+        if: matrix.language != 'cpp' && matrix.language != 'java'
         uses: github/codeql-action/autobuild@v3
+
+      - name: Build C++ implementation
+        if: matrix.language == 'cpp'
+        run: |
+          cmake -S implementations/cpp -B implementations/cpp/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build implementations/cpp/build --config Release
+
+      - name: Build Java implementation
+        if: matrix.language == 'java'
+        working-directory: implementations/java
+        run: |
+          ./gradlew --no-daemon assemble
+          ./gradlew --no-daemon test
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
